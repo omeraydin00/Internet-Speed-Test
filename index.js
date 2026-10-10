@@ -1,75 +1,55 @@
-let startTime, endTime;
-let imageSize = "";
-let image = new Image();
 let bitSpeed = document.getElementById("bits"),
   kbSpeed = document.getElementById("kbs"),
   mbSpeed = document.getElementById("mbs"),
   info = document.getElementById("info");
 
-let totalBitSpeed = 0;
-let totalKbSpeed = 0;
-let totalMbSpeed = 0;
-let numTests = 1;
-let testCompleted = 0;
+let numTests = 3;
 
-// Get random image from unsplash.com
-let imageApi = "https://source.unsplash.com/random?topic=nature";
+// A large random photo from picsum.photos. The query string makes every request unique,
+// so the browser never answers from its cache.
+const imageApi = () => `https://picsum.photos/3000/2000?random=${Date.now()}-${Math.random()}`;
 
-// When image loads
-image.onload = async function () {
-  endTime = new Date().getTime();
+// Download one image and return the speed in bits per second.
+// The size is measured from the bytes actually received, so it doesn't depend on
+// the server sending a content-length header.
+async function measureSpeed() {
+  const startTime = performance.now();
+  const response = await fetch(imageApi(), { cache: "no-store" });
+  const blob = await response.blob();
+  const endTime = performance.now();
 
-  // Get image size
-  await fetch(imageApi).then((response) => {
-    imageSize = response.headers.get("content-length");
-    calculateSpeed();
-  });
-};
-
-// Function to calculate speed
-function calculateSpeed() {
   // Time taken in seconds
-  let timeDuration = (endTime - startTime) / 1000;
+  const timeDuration = (endTime - startTime) / 1000;
   // Total bits
-  let loadedBits = imageSize * 8;
-  let speedInBts = loadedBits / timeDuration;
-  let speedInKbs = speedInBts / 1024;
-  let speedInMbs = speedInKbs / 1024;
-
-  totalBitSpeed += speedInBts;
-  totalKbSpeed += speedInKbs;
-  totalMbSpeed += speedInMbs;
-
-  testCompleted++;
-
-  // If all tests completed (we get 5 image then calculate average)
-  if (testCompleted === numTests) {
-    let averageSpeedInBps = (totalBitSpeed / numTests).toFixed(2);
-    let averageSpeedInKbps = (totalKbSpeed / numTests).toFixed(2);
-    let averageSpeedInMbps = (totalMbSpeed / numTests).toFixed(2);
-
-    // Display average speeds
-    bitSpeed.innerHTML += `${averageSpeedInBps}`;
-    kbSpeed.innerHTML += `${averageSpeedInKbps}`;
-    mbSpeed.innerHTML += `${averageSpeedInMbps}`;
-    info.innerHTML = "Test Completed!";
-  } else {
-    // Run the next test
-    startTime = new Date().getTime();
-    image.src = imageApi;
-  }
+  const loadedBits = blob.size * 8;
+  return loadedBits / timeDuration;
 }
 
-// Initial function to start tests
+// Run the tests one after another and show the average
 const init = async () => {
   info.innerHTML = "Testing...";
-  startTime = new Date().getTime();
-  image.src = imageApi;
+  let totalBitSpeed = 0;
+
+  try {
+    for (let i = 0; i < numTests; i++) {
+      totalBitSpeed += await measureSpeed();
+      info.innerHTML = `Testing... ${i + 1}/${numTests}`;
+    }
+  } catch (error) {
+    info.innerHTML = "Test failed. Check your connection and try again.";
+    return;
+  }
+
+  const averageSpeedInBps = totalBitSpeed / numTests;
+  const averageSpeedInKbps = averageSpeedInBps / 1024;
+  const averageSpeedInMbps = averageSpeedInKbps / 1024;
+
+  // Display average speeds
+  bitSpeed.innerHTML += `${averageSpeedInBps.toFixed(2)}`;
+  kbSpeed.innerHTML += `${averageSpeedInKbps.toFixed(2)}`;
+  mbSpeed.innerHTML += `${averageSpeedInMbps.toFixed(2)}`;
+  info.innerHTML = "Test Completed!";
 };
 
-// Run tests when window loads
-window.onload = () => {
-  for (let i = 0; i < numTests; i++) {
-    init();
-  }
-};
+// Run the test when the window loads
+window.onload = init;
